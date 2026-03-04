@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1"/>
+<title>THE QUAD — BBD University</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Lato:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fdf5f5;font-family:'Lato',sans-serif;min-height:100vh}
+button{cursor:pointer;font-family:'Lato',sans-serif}
+textarea,input,select{font-family:'Lato',sans-serif;direction:ltr;text-transform:none;unicode-bidi:plaintext}
+textarea::placeholder,input::placeholder{color:#b06060}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#fdf5f5}
+::-webkit-scrollbar-thumb{background:#c88080;border-radius:4px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes popIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+.fade-up{animation:fadeUp 0.32s ease both}
+.slide-up{animation:slideUp 0.28s cubic-bezier(.22,1,.36,1) both}
+.slide-in{animation:slideIn 0.28s cubic-bezier(.22,1,.36,1) both}
+.pop-in{animation:popIn 0.2s ease both}
+.pulse{animation:pulse 2s infinite}
+.spin{animation:spin 0.8s linear infinite}
+.float{animation:float 3s ease-in-out infinite}
+.card{background:#fff;border:1px solid #e8c0c0;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(128,0,0,0.07);transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:#c88080;box-shadow:0 4px 20px rgba(128,0,0,0.12)}
+/* Chat bubbles */
+.bubble-me{background:#800000;color:white;border-radius:18px 18px 4px 18px;padding:10px 14px;max-width:75%;font-size:14px;line-height:1.5;box-shadow:0 2px 8px rgba(128,0,0,0.25)}
+.bubble-them{background:#fff;color:#1a0000;border:1px solid #e8c0c0;border-radius:18px 18px 18px 4px;padding:10px 14px;max-width:75%;font-size:14px;line-height:1.5;box-shadow:0 1px 4px rgba(128,0,0,0.08)}
+.bubble-system{background:#fdf0f0;color:#6b2020;border-radius:12px;padding:8px 14px;font-size:12px;text-align:center;border:1px solid #e8c0c0;max-width:85%}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef} = React;
+
+/* ── SUPABASE ─────────────────────────────────────────────────── */
+const SUPABASE_URL      = "https://inrikoexanggtssgugwa.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlucmlrb2V4YW5nZ3Rzc2d1Z3dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTM5OTksImV4cCI6MjA4ODAyOTk5OX0.Ib7rsL63FkF2YEcWEUkl1h2nCBj2VAgW6R8rEOMy294";
+const DEMO_MODE = false;
+let _sbClient = null;
+try { const _s=window.supabase||window.supabase_js; if(_s&&!DEMO_MODE) _sbClient=_s.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); } catch(e){}
+const _mock={auth:{getSession:()=>Promise.resolve({data:{session:null}}),signInWithOtp:()=>new Promise(r=>setTimeout(()=>r({error:null}),1200)),signOut:()=>Promise.resolve({}),onAuthStateChange:()=>({data:{subscription:{unsubscribe:()=>{}}}})}};
+const sb=_sbClient||_mock;
+const ALLOWED_DOMAIN="@bbdu.ac.in";
+const ALLOWED_DOMAIN2="@gmail.com";
+
+/* ── SEED DATA ────────────────────────────────────────────────── */
+const SEED_CONFS=[
+  {id:1,text:"I've attended every single 9 AM lecture this semester. Nobody believes me. I don't believe me.",upvotes:841,downvotes:12,time:"2h ago",comments:34,hot:true,authorEmail:"mystery1@bbdu.ac.in"},
+  {id:2,text:"Accidentally called my professor 'uncle' in front of the entire class. I have not recovered.",upvotes:1204,downvotes:7,time:"4h ago",comments:91,hot:true,authorEmail:"mystery2@bbdu.ac.in"},
+  {id:3,text:"The canteen samosas are the only reason I have not dropped out. I said what I said.",upvotes:577,downvotes:33,time:"5h ago",comments:22,hot:false,authorEmail:"mystery3@bbdu.ac.in"},
+  {id:4,text:"Sat next to my crush the whole semester. Never spoke once. Yesterday was the last class. It was a good run.",upvotes:993,downvotes:4,time:"1d ago",comments:118,hot:true,authorEmail:"mystery4@bbdu.ac.in"},
+  {id:5,text:"Submitted my assignment with the wrong student ID. Got full marks. The system is broken and I am thriving.",upvotes:430,downvotes:18,time:"1d ago",comments:41,hot:false,authorEmail:"mystery5@bbdu.ac.in"},
+  {id:6,text:"I have been 'almost done' with my project for three weeks. Send help.",upvotes:312,downvotes:9,time:"2d ago",comments:17,hot:false,authorEmail:"mystery6@bbdu.ac.in"},
+];
+const SEED_LISTINGS=[
+  {id:101,title:"Engineering Mathematics Vol 1 & 2",price:180,category:"book",condition:"Good",time:"1h ago",likes:12,desc:"Both volumes, barely highlighted. Lifesaver for backlog exams.",seller:"rahul@bbdu.ac.in"},
+  {id:102,title:"Hero Cycle — barely used",price:1800,category:"cycle",condition:"Like New",time:"3h ago",likes:31,desc:"Hostel life special. Leaving campus, must go. Serious buyers only.",seller:"priya@bbdu.ac.in"},
+  {id:103,title:"Data Structures — Lipschutz",price:90,category:"book",condition:"Fair",time:"5h ago",likes:7,desc:"Pen marks on a few pages, all content intact. Perfect for exams.",seller:"amit@bbdu.ac.in"},
+  {id:104,title:'HP Laptop Bag 15.6"',price:350,category:"other",condition:"Good",time:"8h ago",likes:5,desc:"Waterproof, padded, lots of pockets. Upgrading to a backpack.",seller:"sneha@bbdu.ac.in"},
+  {id:105,title:"Atlas Cycle — MTB Style",price:2500,category:"cycle",condition:"Good",time:"1d ago",likes:19,desc:"Disc brakes, new tires last month. Great for campus.",seller:"vikram@bbdu.ac.in"},
+  {id:106,title:"Computer Networks — Forouzan 5e",price:120,category:"book",condition:"Good",time:"2d ago",likes:3,desc:"5th edition, all pages intact. A must for your networking course.",seller:"ananya@bbdu.ac.in"},
+];
+
+/* ── DEMO INBOX (seed conversations) ─────────────────────────── */
+const makeMsg=(id,from,text,ts,system=false)=>({id,from,text,ts,system});
+const SEED_CONVOS=[
+  {id:"c1",type:"marketplace",with:"rahul@bbdu.ac.in",item:"Engineering Mathematics Vol 1 & 2",itemPrice:180,unread:2,
+   messages:[
+     makeMsg(1,"rahul@bbdu.ac.in","Hi! Yes it's still available.",new Date(Date.now()-3600000*5)),
+     makeMsg(2,"rahul@bbdu.ac.in","You can collect from Hostel Block C tomorrow morning.",new Date(Date.now()-3600000*4)),
+   ]},
+  {id:"c2",type:"confession",with:"mystery2@bbdu.ac.in",revealed:true,unread:1,
+   confText:"Accidentally called my professor 'uncle'…",
+   messages:[
+     makeMsg(1,"mystery2@bbdu.ac.in","Haha yes that was me 😭 Never living it down.",new Date(Date.now()-86400000)),
+     makeMsg(2,"system","Identity revealed after connection accepted","",true),
+   ]},
+];
+
+/* ── ICONS ────────────────────────────────────────────────────── */
+const Up    =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>;
+const Down  =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>;
+const Flag  =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+const Plus  =({c="currentColor",s=24})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>;
+const MsgIco=({c="currentColor",s=13})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+const Flame =({c="#e05a00",s=11})=><svg width={s} height={s} fill={c} viewBox="0 0 24 24"><path d="M12 2C8 8 6 10 6 14a6 6 0 0012 0c0-4-2-6-6-12z"/></svg>;
+const Bag   =({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>;
+const User  =({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+const Rss   =({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M4 11a9 9 0 019 9"/><path d="M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1" fill={c}/></svg>;
+const ChatNav=({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+const Book  =({c="currentColor",s=12})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>;
+const Bike  =({c="currentColor",s=12})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h-5l-3 5.5M9 8l2-2h3l2 6"/></svg>;
+const Lpt   =({c="currentColor",s=12})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 20h20"/></svg>;
+const Srch  =({c="currentColor",s=15})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>;
+const Hrt   =({c="currentColor",s=12,fill="none"})=><svg width={s} height={s} fill={fill} stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
+const Xx    =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>;
+const Ghost =({c="currentColor",s=14})=><svg width={s} height={s} fill={c} viewBox="0 0 24 24"><path d="M12 2a8 8 0 018 8v12l-3-2-3 2-3-2-3 2-3-2V10A8 8 0 0112 2zm-2 8a1 1 0 100 2 1 1 0 000-2zm4 0a1 1 0 100 2 1 1 0 000-2z"/></svg>;
+const Star  =({c="currentColor",s=12})=><svg width={s} height={s} fill={c} viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>;
+const Clock =({c="currentColor",s=12})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>;
+const Check =({c="currentColor",s=16})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>;
+const Chev  =({c="currentColor",s=16})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>;
+const Back  =({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>;
+const Mail  =({c="currentColor",s=20})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
+const LogOut=({c="currentColor",s=16})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const Shield=({c="currentColor",s=48})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="1.5" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>;
+const Trash =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
+const Send  =({c="currentColor",s=18})=><svg width={s} height={s} fill={c} viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z" fill="none" stroke={c} strokeWidth="2"/></svg>;
+const Link2 =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+const Ellipsis=({c="currentColor",s=20})=><svg width={s} height={s} fill={c} viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>;
+const Spinner=({s=20,c="#800000"})=><svg width={s} height={s} viewBox="0 0 24 24" className="spin"><circle cx="12" cy="12" r="10" fill="none" stroke={c} strokeWidth="2.5" strokeDasharray="31.4" strokeDashoffset="10" strokeLinecap="round"/></svg>;
+const EyeOff=({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+const Eye   =({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const DoubleCheck=({c="currentColor",s=14})=><svg width={s} height={s} fill="none" stroke={c} strokeWidth="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/><path d="M16 6l-1 1"/></svg>;
+
+const catIco=c=>c==="book"?<Book c="currentColor" s={12}/>:c==="cycle"?<Bike c="currentColor" s={12}/>:<Lpt c="currentColor" s={12}/>;
+const catLbl=c=>c==="book"?"Book":c==="cycle"?"Cycle":"Other";
+const CC={book:{bg:"#eff6ff",color:"#1d4ed8",border:"#bfdbfe"},cycle:{bg:"#f0fdf4",color:"#16a34a",border:"#bbf7d0"},other:{bg:"#fffbeb",color:"#d97706",border:"#fde68a"}};
+const T={page:"#fdf5f5",card:"#fff",subtle:"#fdf0f0",border:"#e8c0c0",borderM:"#c88080",maroon:"#800000",textMain:"#1a0000",textSub:"#6b2020",textDim:"#b06060"};
+
+const fmtTime=d=>{if(!d)return"";const now=new Date();const diff=(now-new Date(d))/1000;if(diff<60)return"now";if(diff<3600)return Math.floor(diff/60)+"m";if(diff<86400)return Math.floor(diff/3600)+"h";return Math.floor(diff/86400)+"d";};
+const avatar=(email,size=38)=>{const name=email?email.split("@")[0]:"?";const initials=name.slice(0,2).toUpperCase();const colors=["#800000","#9b1c1c","#7f1d1d","#991b1b","#a03030"];const col=colors[name.charCodeAt(0)%colors.length];return(<div style={{width:size,height:size,borderRadius:"50%",background:col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"white",fontSize:size*0.35,fontWeight:900,letterSpacing:"0.05em"}}>{initials}</div>);};
+
+/* ══════════ AUTH SCREEN ══════════ */
+function AuthScreen({onDemoLogin}){
+  const [email,setEmail]=useState("");
+  const [status,setStatus]=useState("idle");
+  const [err,setErr]=useState("");
+  const valid=e=>e.toLowerCase().trim().endsWith(ALLOWED_DOMAIN)||e.toLowerCase().trim().endsWith(ALLOWED_DOMAIN2);
+  const send=async()=>{
+    const t=email.toLowerCase().trim();
+    if(!t){setErr("Please enter your email.");setStatus("error");return;}
+    if(!valid(t)){setErr(`Only ${ALLOWED_DOMAIN} or ${ALLOWED_DOMAIN2} emails allowed.`);setStatus("error");return;}
+    setStatus("loading");setErr("");
+    if(DEMO_MODE){setTimeout(()=>onDemoLogin(t),1000);return;}
+    try{const{error}=await sb.auth.signInWithOtp({email:t,options:{emailRedirectTo:window.location.href}});if(error)throw error;setStatus("sent");}
+    catch(e){setErr(e.message||"Something went wrong.");setStatus("error");}
+  };
+  return(
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",backgroundColor:T.page,overflow:"hidden"}}>
+      <div style={{height:4,background:`linear-gradient(to right,${T.maroon},#c04040,${T.maroon})`}}/>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 28px"}}>
+        <div className="float" style={{marginBottom:28,textAlign:"center"}}>
+          <div style={{width:72,height:72,borderRadius:"50%",background:T.maroon,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 28px rgba(128,0,0,0.3)"}}><Shield c="white" s={36}/></div>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:32,fontWeight:900,color:T.maroon,letterSpacing:"0.15em"}}>THE QUAD</h1>
+          <p style={{fontSize:12,color:T.textDim,letterSpacing:"0.2em",textTransform:"uppercase",marginTop:4,fontWeight:700}}>BBD University</p>
+        </div>
+        {status!=="sent"?(
+          <div className="fade-up" style={{width:"100%",background:T.card,borderRadius:20,border:`1px solid ${T.border}`,padding:28,boxShadow:"0 4px 24px rgba(128,0,0,0.1)"}}>
+            {DEMO_MODE&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 12px",marginBottom:16,display:"flex",gap:8}}>
+              <span>🧪</span><p style={{fontSize:12,color:"#92400e",lineHeight:1.5,fontWeight:600}}><strong>Demo Mode</strong> — Enter any <strong>@bbdu.ac.in</strong> email to preview instantly.</p>
+            </div>}
+            <h2 style={{fontSize:18,fontWeight:900,color:T.textMain,marginBottom:6,fontFamily:"'Playfair Display',serif"}}>Student Login</h2>
+            <p style={{fontSize:13,color:T.textSub,marginBottom:20,lineHeight:1.5}}>Enter your BBD University email — magic link, no password.</p>
+            <div style={{position:"relative",marginBottom:err?8:16}}>
+              <div style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><Mail c={T.textDim} s={16}/></div>
+              <input type="email" value={email} onChange={e=>{setEmail(e.target.value);if(status==="error"){setStatus("idle");setErr("");}}} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={`yourname${ALLOWED_DOMAIN}`}
+                style={{width:"100%",background:T.subtle,border:`1.5px solid ${status==="error"?"#dc2626":T.border}`,borderRadius:12,padding:"12px 14px 12px 42px",fontSize:14,color:T.textMain,outline:"none"}}
+                onFocus={e=>e.target.style.borderColor=status==="error"?"#dc2626":T.maroon} onBlur={e=>e.target.style.borderColor=status==="error"?"#dc2626":T.border}/>
+            </div>
+            {err&&<div style={{display:"flex",gap:8,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 12px",marginBottom:14}}>
+              <svg width={14} height={14} style={{flexShrink:0,marginTop:1}} fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <p style={{fontSize:12,color:"#b91c1c",lineHeight:1.5,fontWeight:600}}>{err}</p>
+            </div>}
+            {!err&&<p style={{fontSize:12,color:T.textDim,marginBottom:16}}>Only <strong style={{color:T.textSub}}>{ALLOWED_DOMAIN}</strong> emails accepted</p>}
+            <button onClick={send} disabled={status==="loading"} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:status==="loading"?"#a04040":T.maroon,color:"white",fontSize:14,fontWeight:900,cursor:status==="loading"?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 4px 16px rgba(128,0,0,0.35)"}}>
+              {status==="loading"?<><Spinner s={18} c="white"/>Sending…</>:<><Mail c="white" s={16}/>Send Magic Link</>}
+            </button>
+          </div>
+        ):(
+          <div className="fade-up" style={{width:"100%",background:T.card,borderRadius:20,border:"1px solid #bbf7d0",padding:28,textAlign:"center"}}>
+            <Mail c="#16a34a" s={28}/><h2 style={{fontSize:18,fontWeight:900,color:"#15803d",margin:"12px 0 8px",fontFamily:"'Playfair Display',serif"}}>Check your inbox!</h2>
+            <p style={{fontSize:13,color:"#166534",lineHeight:1.6,marginBottom:16}}>Magic link sent to <strong>{email}</strong></p>
+            <button onClick={()=>{setStatus("idle");setEmail("");setErr("");}} style={{padding:"10px 24px",borderRadius:999,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>← Different email</button>
+          </div>
+        )}
+        <p style={{marginTop:20,fontSize:11,color:T.textDim,textAlign:"center",lineHeight:1.6}}>🔒 Anonymous on posts · Email for login only</p>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════ CHAT VIEW — WhatsApp-style full screen ══════════ */
+function ChatView({convo,userEmail,user,onBack,onReport}){
+  const [msgs,setMsgs]   = useState(convo.messages||[]);
+  const [input,setInput] = useState("");
+  const [showMenu,setShowMenu] = useState(false);
+  const [reportDone,setReportDone] = useState(false);
+  const [showReveal,setShowReveal] = useState(false);
+  const endRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
+
+  useEffect(()=>{
+    if(!convo?.id)return;
+    // Poll for new messages every 3 seconds
+    const poll=async()=>{
+      const{data}=await sb.from('messages').select('*').eq('conversation_id',convo.id).order('created_at',{ascending:true});
+      if(data){
+        setMsgs(data.map(m=>({id:m.id,from:m.sender_id===user?.id?userEmail:convo.with,text:m.text,ts:new Date(m.created_at),system:m.is_system||false})));
+      }
+    };
+    poll();
+    const timer=setInterval(poll,3000);
+    return()=>clearInterval(timer);
+  },[convo?.id]);
+
+  const isMarket = convo.type==="marketplace";
+  const peerEmail= convo.with;
+  const peerName = peerEmail.split("@")[0];
+  const isRevealed = convo.revealed;
+
+  const send=async()=>{
+    if(!input.trim())return;
+    const txt=input.trim();
+    const newMsg={id:Date.now(),from:userEmail,text:txt,ts:new Date()};
+    setMsgs(m=>[...m,newMsg]);
+    setInput("");
+    await sb.from('messages').insert({conversation_id:convo.id,sender_id:user?.id,text:txt,is_system:false});
+    // Simulate reply after 1.5s in demo
+    setTimeout(()=>{
+      const replies=isMarket?
+        ["Sure, I'll keep it for you!","Cash on delivery works?","Can you come tomorrow?","Deal! When can you pick it up?"] :
+        ["Haha that's actually me 😅","Small world!","Wait seriously??","I can't believe this 😭"];
+      setMsgs(m=>[...m,{id:Date.now()+1,from:peerEmail,text:replies[Math.floor(Math.random()*replies.length)],ts:new Date()}]);
+    },1500);
+    inputRef.current?.focus();
+  };
+
+  const handleReveal=()=>{
+    setShowReveal(false);
+    setMsgs(m=>[...m,{id:Date.now(),from:"system",text:`✨ Connection accepted! You're now chatting with ${peerName} (${peerEmail})`,ts:new Date(),system:true}]);
+  };
+
+  const handleReport=()=>{
+    setShowMenu(false);
+    setReportDone(true);
+    onReport&&onReport(convo.id);
+    setTimeout(()=>setReportDone(false),3000);
+  };
+
+  const headerBg=T.maroon;
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:100,maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",background:"#fdf5f5"}} className="slide-in">
+
+      {/* ── CHAT HEADER ── */}
+      <div style={{background:T.maroon,boxShadow:"0 2px 12px rgba(128,0,0,0.3)",zIndex:10}}>
+        <div style={{height:1,background:"linear-gradient(to right,transparent,rgba(255,220,150,0.5),transparent)"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px 12px"}}>
+          <button onClick={onBack} style={{background:"none",border:"none",display:"flex",cursor:"pointer",padding:4,marginLeft:-4,color:"white"}}><Back c="white" s={22}/></button>
+          {avatar(isMarket||isRevealed?peerEmail:"ghost@bbdu.ac.in",40)}
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:900,color:"white",fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {isMarket ? peerName : (isRevealed ? peerName : "Anonymous")}
+            </p>
+            <p style={{fontSize:11,color:"rgba(255,255,255,0.75)",marginTop:1}}>
+              {isMarket ? `re: ${convo.item}` : (isRevealed ? peerEmail : "Identity hidden until accepted")}
+            </p>
+          </div>
+          <button onClick={()=>setShowMenu(m=>!m)} style={{background:"none",border:"none",cursor:"pointer",padding:6,color:"white",position:"relative"}}>
+            <Ellipsis c="white" s={22}/>
+            {/* Dropdown menu */}
+            {showMenu&&(
+              <div style={{position:"absolute",top:"100%",right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",padding:"6px 0",minWidth:160,zIndex:20}} className="pop-in">
+                <button onClick={handleReport} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,color:"#dc2626"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#fef2f2"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  <Flag c="#dc2626" s={14}/>Report User
+                </button>
+                <button onClick={()=>setShowMenu(false)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,color:T.textSub}}
+                  onMouseEnter={e=>e.currentTarget.style.background=T.subtle} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  <Xx c={T.textSub} s={14}/>Close menu
+                </button>
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Context banner for marketplace */}
+      {isMarket&&(
+        <div style={{background:"#fdf0f0",borderBottom:`1px solid ${T.border}`,padding:"8px 16px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:T.subtle,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Bag c={T.maroon} s={14}/></div>
+          <div>
+            <p style={{fontSize:12,fontWeight:700,color:T.textMain,lineHeight:1.3}}>{convo.item}</p>
+            <p style={{fontSize:12,color:T.maroon,fontWeight:900}}>₹{convo.itemPrice}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Confession banner */}
+      {!isMarket&&!isRevealed&&(
+        <div style={{background:"#fffbeb",borderBottom:`1px solid #fde68a`,padding:"10px 16px",display:"flex",alignItems:"flex-start",gap:10}}>
+          <Ghost c="#d97706" s={16}/>
+          <div style={{flex:1}}>
+            <p style={{fontSize:12,color:"#92400e",lineHeight:1.5}}>
+              <strong>Anonymous connection.</strong> This person's identity will only be revealed if you both accept.
+            </p>
+          </div>
+          {!convo.revealed&&(
+            <button onClick={()=>setShowReveal(true)} style={{flexShrink:0,padding:"5px 10px",borderRadius:999,background:"#fef3c7",border:"1px solid #fde68a",color:"#92400e",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <Eye c="#92400e" s={11}/>Reveal
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Report toast */}
+      {reportDone&&(
+        <div className="fade-up" style={{background:"#1a0000",color:"white",padding:"10px 16px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8,zIndex:20}}>
+          <Check c="#4ade80" s={14}/>User reported. Our team will review this conversation.
+        </div>
+      )}
+
+      {/* ── MESSAGES ── */}
+      <div style={{flex:1,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:8,background:"#f8eeee"}}
+        onClick={()=>setShowMenu(false)}>
+        {msgs.map((m,i)=>{
+          const isMe = m.from===userEmail;
+          const isSystem = m.system||m.from==="system";
+          if(isSystem) return(
+            <div key={m.id||i} style={{display:"flex",justifyContent:"center",margin:"4px 0"}} className="pop-in">
+              <span className="bubble-system">{m.text}</span>
+            </div>
+          );
+          return(
+            <div key={m.id||i} style={{display:"flex",justifyContent:isMe?"flex-end":"flex-start",alignItems:"flex-end",gap:8}} className="fade-up">
+              {!isMe&&<div style={{flexShrink:0,marginBottom:2}}>{avatar(m.from,28)}</div>}
+              <div>
+                <div className={isMe?"bubble-me":"bubble-them"}>{m.text}</div>
+                <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3,justifyContent:isMe?"flex-end":"flex-start"}}>
+                  <span style={{fontSize:10,color:T.textDim}}>{fmtTime(m.ts)}</span>
+                  {isMe&&<DoubleCheck c="#b06060" s={12}/>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef}/>
+      </div>
+
+      {/* ── INPUT BAR ── */}
+      <div style={{background:T.card,borderTop:`1px solid ${T.border}`,padding:"10px 12px",display:"flex",gap:8,alignItems:"flex-end",boxShadow:"0 -2px 12px rgba(128,0,0,0.06)"}}>
+        <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
+          placeholder="Type a message…" rows={1} dir="ltr" dir="ltr"
+          style={{flex:1,background:T.subtle,border:`1.5px solid ${T.border}`,borderRadius:22,padding:"10px 16px",fontSize:14,color:T.textMain,outline:"none",resize:"none",lineHeight:1.4,maxHeight:100,overflowY:"auto"}}
+          onFocus={e=>e.target.style.borderColor=T.maroon} onBlur={e=>e.target.style.borderColor=T.border}/>
+        <button onClick={send} disabled={!input.trim()}
+          style={{width:44,height:44,borderRadius:"50%",background:input.trim()?T.maroon:"#e8c0c0",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:input.trim()?"pointer":"default",transition:"all 0.2s",flexShrink:0,boxShadow:input.trim()?"0 4px 12px rgba(128,0,0,0.35)":"none"}}>
+          <Send c="white" s={16}/>
+        </button>
+      </div>
+
+      {/* ── REVEAL IDENTITY DIALOG ── */}
+      {showReveal&&(
+        <div style={{position:"absolute",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 28px",background:"rgba(26,0,0,0.5)",backdropFilter:"blur(4px)"}}>
+          <div className="pop-in" style={{background:T.card,borderRadius:20,padding:24,border:`1px solid ${T.border}`,boxShadow:"0 8px 40px rgba(128,0,0,0.2)",textAlign:"center",width:"100%",maxWidth:320}}>
+            <div style={{width:56,height:56,borderRadius:"50%",background:"#fffbeb",border:"2px solid #fde68a",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><Eye c="#d97706" s={26}/></div>
+            <h3 style={{fontSize:16,fontWeight:900,color:T.textMain,marginBottom:8,fontFamily:"'Playfair Display',serif"}}>Reveal Identity?</h3>
+            <p style={{fontSize:13,color:T.textSub,marginBottom:20,lineHeight:1.5}}>Both of you will see each other's names and emails. This can't be undone.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowReveal(false)} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+              <button onClick={handleReveal} style={{flex:1,padding:"11px",borderRadius:12,border:"none",background:"#d97706",color:"white",fontSize:13,fontWeight:900,cursor:"pointer",boxShadow:"0 3px 12px rgba(217,119,6,0.4)"}}>Yes, reveal</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════ MESSAGES LIST ══════════ */
+function MessagesScreen({convos,userEmail,onOpen,onBack,totalUnread,pendingReqs=[],acceptRequest,declineRequest}){
+  return(
+    <div style={{minHeight:"100vh",backgroundColor:T.page}}>
+      <div style={{background:T.maroon,boxShadow:"0 4px 20px rgba(128,0,0,0.2)"}}>
+        <div style={{height:1,background:"linear-gradient(to right,transparent,rgba(255,220,150,0.5),transparent)"}}/>
+        <div style={{padding:"14px 20px",display:"flex",alignItems:"center",gap:12}}>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:20,fontWeight:900,color:"white",letterSpacing:"0.1em",flex:1}}>Messages</h1>
+          <span style={{fontSize:11,color:"rgba(255,255,255,0.75)",fontWeight:700}}>{totalUnread>0?`${totalUnread} unread`:""}</span>
+        </div>
+        <div style={{height:2,background:"linear-gradient(to right,rgba(255,255,255,0.1),rgba(255,255,255,0.3),rgba(255,255,255,0.1))"}}/>
+      </div>
+      <div style={{padding:"12px 0",paddingBottom:80}}>
+        {convos.length===0?(
+          <div style={{textAlign:"center",padding:"80px 20px",color:T.textDim}}>
+            <div style={{marginBottom:16,opacity:0.3,display:"flex",justifyContent:"center"}}><ChatNav c={T.textDim} s={48}/></div>
+            <p style={{fontSize:15,fontWeight:700,color:T.textSub,marginBottom:8}}>No messages yet</p>
+            <p style={{fontSize:13,lineHeight:1.6}}>Message sellers from the Marketplace<br/>or Request to Connect in Confessions.</p>
+          </div>
+        ):(
+          <>
+          {pendingReqs.length>0&&(<div style={{margin:"0 0 12px 0"}}>
+            <p style={{fontSize:11,fontWeight:800,color:T.maroon,letterSpacing:"0.08em",textTransform:"uppercase",padding:"0 4px 8px 16px"}}>🔔 Requests ({pendingReqs.length})</p>
+            {pendingReqs.map(req=>(<div key={req.id} style={{margin:"0 12px 8px",background:"#fff8f8",border:"1.5px solid "+T.maroon,borderRadius:14,padding:"12px 14px"}}>
+              <p style={{fontSize:12,color:T.textDim,marginBottom:4}}>Wants to connect about:</p>
+              <p style={{fontSize:13,color:T.textMain,fontStyle:"italic",marginBottom:10,lineHeight:1.5}}>{(req.conf_text||"").slice(0,80)}</p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>acceptRequest(req)} style={{flex:1,padding:"8px",borderRadius:10,background:T.maroon,border:"none",color:"white",fontSize:13,fontWeight:700,cursor:"pointer"}}>Accept</button>
+                <button onClick={()=>declineRequest(req)} style={{flex:1,padding:"8px",borderRadius:10,background:"#f3f4f6",border:"none",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>Decline</button>
+              </div>
+            </div>))}
+          </div>)}
+          {convos.map((c,i)=>{
+            const isMarket=c.type==="marketplace";
+            const peerEmail=c.with;
+            const peerName=peerEmail.split("@")[0];
+            const displayName=isMarket?peerName:(c.revealed?peerName:"Anonymous");
+            const lastMsg=c.messages[c.messages.length-1];
+            const lastText=lastMsg?.system?"[System]":(lastMsg?.text||"No messages yet");
+            return(
+              <button key={c.id} onClick={()=>onOpen(c)}
+                style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:c.unread>0?"#fff8f8":T.card,border:"none",borderBottom:`1px solid ${T.border}`,cursor:"pointer",textAlign:"left",transition:"background 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="#fdf0f0"} onMouseLeave={e=>e.currentTarget.style.background=c.unread>0?"#fff8f8":T.card}>
+                <div style={{position:"relative"}}>
+                  {avatar(isMarket||c.revealed?peerEmail:"ghost@bbdu.ac.in",46)}
+                  {isMarket&&<div style={{position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:CC.book.bg,border:`2px solid ${T.card}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Bag c={T.maroon} s={8}/></div>}
+                  {!isMarket&&<div style={{position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:"#fffbeb",border:`2px solid ${T.card}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Ghost c="#d97706" s={8}/></div>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
+                    <p style={{fontWeight:c.unread>0?900:700,color:T.textMain,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</p>
+                    <span style={{fontSize:11,color:T.textDim,flexShrink:0,marginLeft:8}}>{fmtTime(lastMsg?.ts)}</span>
+                  </div>
+                  <p style={{fontSize:13,color:c.unread>0?T.textSub:T.textDim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:c.unread>0?700:400}}>{isMarket?`📦 ${c.item} — `:`💬 `}{lastText}</p>
+                </div>
+                {c.unread>0&&<div style={{width:20,height:20,borderRadius:"50%",background:T.maroon,color:"white",fontSize:11,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{c.unread}</div>}
+              </button>
+            );
+          })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════ MAIN APP ══════════ */
+const ModalShell=({onClose,children,tall=false})=>(<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center"}}><div style={{position:"absolute",inset:0,background:"rgba(26,0,0,0.45)",backdropFilter:"blur(4px)"}} onClick={onClose}/><div className="slide-up" style={{position:"relative",width:"100%",maxWidth:430,background:"#fff",border:"1px solid #e8c0c0",borderBottom:"none",borderRadius:"24px 24px 0 0",padding:24,boxShadow:"0 -8px 40px rgba(128,0,0,0.15)",maxHeight:tall?"90vh":"auto",overflowY:"auto"}}><div style={{width:40,height:4,borderRadius:2,background:"#e8c0c0",margin:"0 auto 20px"}}/>{children}</div></div>);
+
+function MainApp({user,onSignOut}){
+  const [nav,setNav]             = useState("feed");
+  const [tab,setTab]             = useState("confessions");
+  const [sort,setSort]           = useState("hot");
+  const [cat,setCat]             = useState("all");
+  const [q,setQ]                 = useState("");
+  const [votes,setVotes]         = useState({});
+  const [liked,setLiked]         = useState({});
+  const [rep,setRep]             = useState({});
+  const [saved,setSaved]         = useState({});
+  const [toast,setToast]         = useState(null);
+  const [confModal,setConfModal] = useState(false);
+  const [draft,setDraft]         = useState("");
+  const [confs,setConfs]         = useState([]);
+  const [loadingPosts,setLoadingPosts] = useState(true);
+  const [sellModal,setSellModal] = useState(false);
+  const [sell,setSell]           = useState({title:"",price:"",category:"book",condition:"Good",desc:""});
+  const [listings,setListings]   = useState([]);
+  const [loadingListings,setLoadingListings] = useState(true);
+  const [signOutDlg,setSignOutDlg] = useState(false);
+  const [profilePage,setProfilePage] = useState(null);
+
+  // Messaging state
+  const [convos,setConvos]       = useState([]);
+  const [openChat,setOpenChat] = useState(null);   // convo object currently open
+  const [connectReqs,setConnectReqs] = useState({});
+  const [pendingReqs,setPendingReqs]   = useState([]);
+  const [commentsPost,setCommentsPost] = useState(null);
+  const [commentDraft,setCommentDraft] = useState(""); // confId -> "pending"|"accepted"
+
+  const userEmail = user?.email||"";
+  const username  = userEmail.split("@")[0];
+  const totalUnread = convos.reduce((s,c)=>s+(c.unread||0),0);
+
+  const showToast=(msg,color="#16a34a")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
+
+  const vote=async(postId,direction)=>{
+    const current=votes[postId];
+    if(current===direction){
+      await sb.from('votes').delete().eq('post_id',postId).eq('user_id',user?.id);
+      setVotes(v=>{const n={...v};delete n[postId];return n;});
+    } else {
+      await sb.from('votes').upsert({post_id:postId,user_id:user?.id,type:direction},{onConflict:'post_id,user_id'});
+      setVotes(v=>({...v,[postId]:direction}));
+    }
+    const post=confs.find(c=>c.id===postId);
+    if(post){
+      const upD=direction==='up'?(current==='up'?-1:1):(current==='up'?-1:0);
+      const downD=direction==='down'?(current==='down'?-1:1):(current==='down'?-1:0);
+      await sb.from('posts').update({upvotes:post.upvotes+upD,downvotes:post.downvotes+downD}).eq('id',postId);
+      setConfs(cs=>cs.map(c=>c.id===postId?{...c,upvotes:c.upvotes+upD,downvotes:c.downvotes+downD}:c));
+    }
+  };
+  const gv  =c=>({up:c.upvotes+(votes[c.id]==="up"?1:0),down:c.downvotes+(votes[c.id]==="down"?1:0)});
+  const report=async(id)=>{if(rep[id])return;setRep(r=>({...r,[id]:true}));await sb.from('reports').insert({reporter_id:user?.id,target_id:String(id),reason:'confession'});showToast('Reported! We will review it.');};
+  const toggleSave=async(postId)=>{
+    if(saved[postId]){
+      await sb.from('saved_posts').delete().eq('user_id',user?.id).eq('post_id',postId);
+      setSaved(s=>{const n={...s};delete n[postId];return n;});
+      showToast("Removed from saved.");
+    } else {
+      await sb.from('saved_posts').insert({user_id:user?.id,post_id:postId});
+      setSaved(s=>({...s,[postId]:true}));
+      showToast("Post saved ✓");
+    }
+  };
+
+  const fetchPosts=async()=>{setLoadingPosts(true);const{data,error}=await sb.from('posts').select('*').order('time',{ascending:false});if(!error&&data)setConfs(data.map(p=>({id:p.id,text:p.text,upvotes:p.upvotes||0,downvotes:p.downvotes||0,hot:p.is_hot||false,comments:p.comment_count||0,mine:p.author_id===user?.id,authorEmail:p.author_id||'unknown@bbdu.ac.in',time:(()=>{const d=(Date.now()-new Date(p.time))/1000;if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago';})()})));setLoadingPosts(false);};
+
+  const fetchListings=async()=>{setLoadingListings(true);const{data,error}=await sb.from('listings').select('*').order('created_at',{ascending:false});if(!error&&data)setListings(data.map(l=>({id:l.id,title:l.title,desc:l.description||'',price:l.price,category:l.category,condition:l.condition,likes:0,seller:l.seller_email||userEmail,seller_id:l.seller_id,mine:l.seller_id===user?.id,time:(()=>{const d=(Date.now()-new Date(l.created_at))/1000;if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago';})()})));setLoadingListings(false);};
+
+  const fetchSaved=async()=>{const{data,error}=await sb.from('saved_posts').select('post_id').eq('user_id',user?.id);if(!error&&data){const m={};data.forEach(r=>{m[r.post_id]=true;});setSaved(m);}};
+
+  const fetchVotes=async()=>{const{data,error}=await sb.from('votes').select('post_id,type').eq('user_id',user?.id);if(!error&&data){const m={};data.forEach(r=>{m[r.post_id]=r.type;});setVotes(m);}};
+
+  useEffect(()=>{if(!user?.id)return;fetchPosts();fetchListings();fetchSaved();fetchVotes();fetchConvos();fetchReports();fetchPendingReqs();},[user?.id]);
+
+  
+  const fetchConvos=async()=>{const uid=user?.id;const{data}=await sb.from('conversations').select('*,messages(*)').or('participant_1.eq.'+uid+',participant_2.eq.'+uid).order('created_at',{ascending:false});if(data)setConvos(data.map(c=>{const peer=c.participant_1===uid?c.participant_2:c.participant_1;const msgs=(c.messages||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(m=>({id:m.id,from:m.sender_id===uid?userEmail:peer,text:m.text,ts:new Date(m.created_at),system:m.is_system||false}));return{id:c.id,type:c.type||'marketplace',with:peer||'',item:c.listing_title||'',itemPrice:c.listing_price||0,confText:c.conf_text||'',revealed:c.identity_revealed||false,unread:0,messages:msgs};}));};
+
+  const fetchReports=async()=>{const{data}=await sb.from('reports').select('target_id').eq('reporter_id',user?.id);if(data){const m={};data.forEach(r=>{m[r.target_id]=true;});setRep(m);}};
+
+  const fetchPendingReqs=async()=>{const{data}=await sb.from("conversations").select("*").eq("participant_2",user?.id).eq("status","pending").eq("type","confession");if(data)setPendingReqs(data);};
+
+  const postConf=async()=>{
+    if(!draft.trim())return;
+    const{error}=await sb.from('posts').insert({text:draft.trim(),author_id:user?.id,is_hot:false});
+    if(!error){setDraft("");setConfModal(false);showToast("Confession posted anonymously 👻");fetchPosts();}
+    else showToast("Failed to post. Try again.","#ef4444");
+  };
+
+  const postSell=async()=>{
+    if(!sell.title.trim()||!sell.price||!sell.desc.trim())return;
+    const{error}=await sb.from('listings').insert({title:sell.title.trim(),description:sell.desc.trim(),price:Number(sell.price),category:sell.category,condition:sell.condition,seller_id:user?.id,seller_email:userEmail});
+    if(!error){setSell({title:"",price:"",category:"book",condition:"Good",desc:""});setSellModal(false);showToast("Listing posted ✓");fetchListings();}
+    else showToast("Failed to post listing.","#ef4444");
+  };
+
+  // Open or create a marketplace chat
+  const openMarketChat=async(listing)=>{const existing=convos.find(c=>c.type==='marketplace'&&c.item===listing.title);if(existing){setOpenChat({...existing,unread:0});setConvos(cs=>cs.map(c=>c.id===existing.id?{...c,unread:0}:c));}else{const sysText='Chat about "'+listing.title+'" - Rs.'+listing.price;const sellerUid=listing.seller_id||listing.seller;const{data:cv}=await sb.from('conversations').insert({type:'marketplace',participant_1:user?.id,participant_2:sellerUid,listing_title:listing.title,listing_price:listing.price,status:'accepted'}).select().single();if(cv){await sb.from('messages').insert({conversation_id:cv.id,sender_id:user?.id,text:sysText,is_system:true});const nc={id:cv.id,type:'marketplace',with:listing.seller,item:listing.title,itemPrice:listing.price,unread:0,messages:[{id:1,from:'system',text:sysText,ts:new Date(),system:true}]};setConvos(cs=>[nc,...cs]);setOpenChat(nc);}else{const nc={id:'m'+Date.now(),type:'marketplace',with:listing.seller,item:listing.title,itemPrice:listing.price,unread:0,messages:[{id:1,from:'system',text:sysText,ts:new Date(),system:true}]};setConvos(cs=>[nc,...cs]);setOpenChat(nc);}}setNav('messages');};
+
+  // Request to connect from confession
+  const requestConnect=async(conf)=>{if(connectReqs[conf.id])return;setConnectReqs(r=>({...r,[conf.id]:'pending'}));const sysText='Connected! Chat anonymously.';const{data:cv}=await sb.from('conversations').insert({type:'confession',participant_1:user?.id,participant_2:conf.author_id||conf.authorEmail||'',conf_text:conf.text,identity_revealed:false}).select().single();if(cv){await sb.from('messages').insert({conversation_id:cv.id,sender_id:user?.id,text:sysText,is_system:true});const nc={id:cv.id,type:'confession',with:conf.author_id||conf.authorEmail||'',confText:conf.text,revealed:false,unread:1,messages:[{id:1,from:'system',text:sysText,ts:new Date(),system:true}]};setConvos(cs=>[nc,...cs]);}setConnectReqs(r=>({...r,[conf.id]:'accepted'}));showToast('Connected! Check Messages');};
+
+  const acceptRequest=async(req)=>{await sb.from("conversations").update({status:"accepted"}).eq("id",req.id);const sysText="Connection accepted! Chat anonymously.";await sb.from("messages").insert({conversation_id:req.id,sender_id:user?.id,text:sysText,is_system:true});setPendingReqs(rs=>rs.filter(r=>r.id!==req.id));const nc={id:req.id,type:"confession",with:req.participant_1,confText:req.conf_text||"",revealed:false,unread:0,messages:[{id:Date.now(),from:"system",text:sysText,ts:new Date(),system:true}]};setConvos(cs=>[nc,...cs]);showToast("Request accepted! Chat started 💬");};
+
+  const declineRequest=async(req)=>{await sb.from("conversations").update({status:"declined"}).eq("id",req.id);setPendingReqs(rs=>rs.filter(r=>r.id!==req.id));showToast("Request declined.");};
+
+  const closeChat=()=>{
+    if(openChat){
+      setConvos(cs=>cs.map(c=>c.id===openChat.id?{...c,messages:openChat.messages,unread:0}:c));
+    }
+    setOpenChat(null);
+  };
+
+  const reportUser=async(convoId)=>{await sb.from('reports').insert({reporter_id:user?.id,target_id:String(convoId),reason:'chat'});showToast("User reported.");};
+
+  const sorted=[...confs].sort((a,b)=>sort==="hot"?(b.upvotes-b.downvotes)-(a.upvotes-a.downvotes):0);
+  const filteredListings=listings.filter(l=>cat==="all"||l.category===cat).filter(l=>l.title.toLowerCase().includes(q.toLowerCase())||l.desc.toLowerCase().includes(q.toLowerCase()));
+  const myConfs=confs.filter(c=>c.mine);
+  const myListings=listings.filter(l=>l.mine);
+  const savedConfs=confs.filter(c=>saved[c.id]);
+  const reportedIds=Object.keys(rep);
+
+  // Shared modal shell
+  
+
+  const SubPage=({title,icon,children})=>(
+    <div style={{padding:"0 16px 24px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 0 14px"}}>
+        <button onClick={()=>setProfilePage(null)} style={{background:"none",border:"none",display:"flex",cursor:"pointer",padding:4}}><Back c={T.maroon} s={20}/></button>
+        <span style={{color:T.maroon,display:"flex"}}>{icon}</span>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:900,color:T.textMain}}>{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+
+  const Empty=({icon,msg})=>(
+    <div style={{textAlign:"center",padding:"50px 0",color:T.textDim}}>
+      <div style={{marginBottom:12,opacity:0.35,display:"flex",justifyContent:"center"}}>{icon}</div>
+      <p style={{fontSize:13,fontWeight:600}}>{msg}</p>
+    </div>
+  );
+
+  // If a chat is open, show full screen chat
+  if(openChat) return <ChatView convo={openChat} userEmail={userEmail} user={user} onBack={closeChat} onReport={reportUser}/>;
+
+  return(
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",backgroundColor:T.page,position:"relative"}}>
+
+      {/* ── HEADER ── */}
+      <header style={{position:"sticky",top:0,zIndex:30,backgroundColor:T.maroon,boxShadow:"0 4px 20px rgba(128,0,0,0.25)"}}>
+        <div style={{height:1,background:"linear-gradient(to right,transparent,rgba(255,220,150,0.6),transparent)"}}/>
+        <div style={{padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:22,fontWeight:900,color:"white",letterSpacing:"0.15em"}}>THE QUAD</h1>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <div className="pulse" style={{width:7,height:7,borderRadius:"50%",background:"#86efac"}}/>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.75)",fontWeight:700}}>Live</span>
+            </div>
+            <button onClick={()=>setSignOutDlg(true)}
+              style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:999,padding:"5px 10px 5px 6px",cursor:"pointer"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.22)"}
+              onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><User c="white" s={12}/></div>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.9)",fontWeight:700,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{username}</span>
+            </button>
+          </div>
+        </div>
+        <div style={{height:2,background:"linear-gradient(to right,rgba(255,255,255,0.1),rgba(255,255,255,0.35),rgba(255,255,255,0.1))"}}/>
+      </header>
+
+      {/* ── MAIN ── */}
+      <main style={{flex:1,overflowY:"auto",backgroundColor:T.page,paddingBottom:80}}>
+
+        {/* ── FEED ── */}
+        {nav==="feed"&&<>
+          <div style={{padding:"16px 16px 0"}}>
+            <div style={{display:"flex",background:"#f5e0e0",border:`1px solid ${T.border}`,borderRadius:16,padding:4,marginBottom:16}}>
+              {[["confessions","Confessions"],["marketplace","Marketplace"]].map(([id,lbl])=>(
+                <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"9px 0",borderRadius:12,fontSize:14,fontWeight:700,border:"none",cursor:"pointer",transition:"all 0.2s",background:tab===id?T.maroon:"transparent",color:tab===id?"white":T.textSub,boxShadow:tab===id?"0 2px 12px rgba(128,0,0,0.3)":"none"}}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── CONFESSIONS ── */}
+          {tab==="confessions"&&<div style={{padding:"0 16px 24px"}}>
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              {[{id:"hot",icon:<Flame/>,lbl:"Hot"},{id:"new",icon:<Clock c={T.textDim}/>,lbl:"New"},{id:"top",icon:<Star c={T.textDim}/>,lbl:"Top"}].map(s=>(
+                <button key={s.id} onClick={()=>setSort(s.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:999,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all 0.2s",background:sort===s.id?T.maroon:T.card,color:sort===s.id?"white":T.textSub,border:sort===s.id?`1px solid ${T.maroon}`:`1px solid ${T.border}`,boxShadow:sort===s.id?"0 2px 10px rgba(128,0,0,0.25)":"none"}}>{s.icon}<span>{s.lbl}</span></button>
+              ))}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {loadingPosts?(<div style={{textAlign:"center",padding:"60px 0"}}><Spinner s={28} c={T.maroon}/><p style={{marginTop:12,fontSize:13,color:T.textDim,fontWeight:600}}>Loading confessions…</p></div>):sorted.length===0?(<div style={{textAlign:"center",padding:"60px 0"}}><p style={{fontSize:32,marginBottom:8}}>👻</p><p style={{fontSize:14,fontWeight:700,color:T.textSub}}>No confessions yet</p></div>):sorted.map((c,i)=>{
+                const{up,down}=gv(c);const uv=votes[c.id];const isSaved=!!saved[c.id];
+                const reqState=connectReqs[c.id];
+                return(
+                  <div key={c.id} className="card fade-up" style={{animationDelay:`${i*35}ms`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                      {c.hot&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:999,background:"#fff7ed",color:"#c2410c",fontSize:11,fontWeight:700,border:"1px solid #fed7aa"}}><Flame c="#ea580c" s={10}/>Trending</span>}
+                      <span style={{flex:1}}/>
+                      <span style={{fontSize:11,color:T.textDim}}>{c.time}</span>
+                    </div>
+                    <p style={{fontSize:15,color:T.textMain,lineHeight:1.65,marginBottom:12,fontFamily:"Georgia,serif",fontWeight:500}}>{c.text}</p>
+                    {/* Actions row 1: votes + save + report */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",borderRadius:999,overflow:"hidden",border:`1px solid ${uv==="up"?T.maroon:T.border}`}}>
+                          <button onClick={()=>vote(c.id,"up")} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",background:uv==="up"?T.maroon:T.card,color:uv==="up"?"white":T.textSub}}><Up c={uv==="up"?"white":T.textSub}/>{up}</button>
+                          <div style={{width:1,height:20,background:uv==="up"?T.maroon:T.border}}/>
+                          <button onClick={()=>vote(c.id,"down")} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",background:uv==="down"?"#fdf0f0":T.card,color:uv==="down"?T.maroon:T.textSub}}><Down c={uv==="down"?T.maroon:T.textSub}/>{down}</button>
+                        </div>
+                        <button onClick={()=>{setCommentsPost(c);setCommentDraft("");sb.from("comments").select("*").eq("post_id",c.id).order("created_at",{ascending:true}).then(({data,error})=>{if(!error&&data)setCommentsPost(cp=>cp&&cp.id===c.id?{...cp,commentsList:data.map(cm=>({id:cm.id,user:cm.user_id?.slice(0,8)||"anon",text:cm.text,time:"•"}))}:cp);}); }} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:999,fontSize:12,fontWeight:700,border:`1px solid ${T.border}`,background:T.card,color:T.textSub,cursor:"pointer"}}><MsgIco c={T.textSub}/>{c.comments}</button>
+                        <button onClick={()=>toggleSave(c.id)} style={{display:"flex",alignItems:"center",padding:"6px 8px",borderRadius:999,border:`1px solid ${isSaved?T.maroon:T.border}`,background:isSaved?"#fdf0f0":T.card,cursor:"pointer"}}>
+                          <Hrt c={isSaved?T.maroon:T.textDim} fill={isSaved?T.maroon:"none"} s={13}/>
+                        </button>
+                      </div>
+                      <button onClick={()=>report(c.id)} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:999,fontSize:11,fontWeight:700,cursor:rep[c.id]?"default":"pointer",background:rep[c.id]?"#fef9c3":"transparent",color:rep[c.id]?"#92400e":T.textDim,border:rep[c.id]?"1px solid #fde68a":"1px solid transparent"}}>
+                        <Flag c={rep[c.id]?"#92400e":T.textDim}/>{rep[c.id]?"Reported":"Report"}
+                      </button>
+                    </div>
+                    {/* ✅ Request to Connect button */}
+                    {!c.mine&&(
+                      <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10}}>
+                        {!reqState?(
+                          <button onClick={()=>requestConnect(c)}
+                            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px",borderRadius:12,background:"#fdf0f0",border:`1px solid ${T.border}`,color:T.maroon,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background="#f5d5d5";e.currentTarget.style.borderColor=T.maroon;}}
+                            onMouseLeave={e=>{e.currentTarget.style.background="#fdf0f0";e.currentTarget.style.borderColor=T.border;}}>
+                            <Link2 c={T.maroon} s={13}/>Request to Connect
+                          </button>
+                        ):reqState==="pending"?(
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px",borderRadius:12,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:13,fontWeight:700}}>
+                            <Spinner s={14} c="#92400e"/>Request sent — waiting…
+                          </div>
+                        ):(
+                          <button onClick={async()=>{setNav("messages");const uid=user?.id;const{data}=await sb.from("conversations").select("*,messages(*)").or("participant_1.eq."+uid+",participant_2.eq."+uid).eq("type","confession").order("created_at",{ascending:false});if(data&&data.length>0){const cv=data[0];const peer=cv.participant_1===uid?cv.participant_2:cv.participant_1;const msgs=(cv.messages||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(m=>({id:m.id,from:m.sender_id===uid?userEmail:peer,text:m.text,ts:new Date(m.created_at),system:m.is_system||false}));const nc={id:cv.id,type:"confession",with:peer,item:"",confText:cv.conf_text||c.text,revealed:cv.identity_revealed||false,unread:0,messages:msgs};setConvos(cs=>{const exists=cs.find(x=>x.id===nc.id);return exists?cs.map(x=>x.id===nc.id?nc:x):[nc,...cs];});setOpenChat(nc);}}}
+                            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px",borderRadius:12,background:T.maroon,border:"none",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 12px rgba(128,0,0,0.3)"}}>
+                            <ChatNav c="white" s={15}/>Open Chat
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>}
+
+          {/* ── MARKETPLACE ── */}
+          {tab==="marketplace"&&<div style={{padding:"0 16px 24px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:12,border:`1px solid ${T.border}`,background:T.card,marginBottom:14,boxShadow:"0 1px 6px rgba(128,0,0,0.06)"}}>
+              <Srch c={T.textDim}/>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search books, cycles, more…"
+                style={{background:"transparent",border:"none",outline:"none",fontSize:14,color:T.textMain,flex:1}}/>
+              {q&&<button onClick={()=>setQ("")} style={{background:"none",border:"none",cursor:"pointer",display:"flex"}}><Xx c={T.textDim}/></button>}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
+              {[{id:"all",lbl:"All"},{id:"book",lbl:"📚 Books"},{id:"cycle",lbl:"🚲 Cycles"},{id:"other",lbl:"📦 Other"}].map(f=>(
+                <button key={f.id} onClick={()=>setCat(f.id)} style={{whiteSpace:"nowrap",padding:"6px 14px",borderRadius:999,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all 0.2s",background:cat===f.id?T.maroon:T.card,color:cat===f.id?"white":T.textSub,border:cat===f.id?`1px solid ${T.maroon}`:`1px solid ${T.border}`}}>{f.lbl}</button>
+              ))}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {loadingListings?(<div style={{textAlign:"center",padding:"60px 0"}}><Spinner s={28} c={T.maroon}/><p style={{marginTop:12,fontSize:13,color:T.textDim,fontWeight:600}}>Loading listings…</p></div>):filteredListings.length===0?(<div style={{textAlign:"center",padding:"60px 0"}}><p style={{fontSize:32,marginBottom:8}}>📦</p><p style={{fontSize:14,fontWeight:700,color:T.textSub}}>No listings yet</p></div>):filteredListings.map(l=>{
+                const cc=CC[l.category]||CC.other;
+                return(
+                  <div key={l.id} className="card">
+                    <div style={{display:"flex",gap:12}}>
+                      <div style={{width:48,height:48,borderRadius:12,background:cc.bg,border:`1px solid ${cc.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:cc.color,display:"flex"}}>{catIco(l.category)}</span></div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                          <div style={{minWidth:0}}>
+                            <p style={{fontWeight:700,color:T.textMain,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.title}</p>
+                            <p style={{fontSize:12,color:T.textSub,marginTop:2,lineHeight:1.5}}>{l.desc}</p>
+                          </div>
+                          <div style={{textAlign:"right",flexShrink:0}}>
+                            <p style={{fontSize:16,fontWeight:900,color:T.maroon}}>₹{l.price}</p>
+                            <button onClick={()=>setLiked(lk=>({...lk,[l.id]:!lk[l.id]}))} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,border:"none",background:"none",cursor:"pointer",color:liked[l.id]?"#dc2626":T.textDim,marginTop:2,marginLeft:"auto"}}>
+                              <Hrt c={liked[l.id]?"#dc2626":T.textDim} fill={liked[l.id]?"#dc2626":"none"}/>{l.likes+(liked[l.id]?1:0)}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12,paddingTop:12,borderTop:`1px solid ${T.border}`}}>
+                      <div style={{display:"flex",gap:6}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:cc.bg,color:cc.color,border:`1px solid ${cc.border}`}}>{catIco(l.category)}{catLbl(l.category)}</span>
+                        <span style={{fontSize:11,color:T.textSub,background:"#fdf0f0",border:`1px solid ${T.border}`,padding:"2px 8px",borderRadius:999}}>{l.condition}</span>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <button onClick={()=>report(l.id)} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,padding:"4px 8px",borderRadius:999,cursor:rep[l.id]?"default":"pointer",background:rep[l.id]?"#fef9c3":"transparent",color:rep[l.id]?"#92400e":T.textDim,border:rep[l.id]?"1px solid #fde68a":"1px solid transparent"}}>
+                          <Flag c={rep[l.id]?"#92400e":T.textDim} s={10}/>{rep[l.id]?"Reported":"Report"}
+                        </button>
+                        {/* ✅ MESSAGE SELLER button — hide on own listings */}
+                        {!l.mine&&<button onClick={()=>openMarketChat(l)}
+                          style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:999,background:T.maroon,color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",boxShadow:"0 2px 10px rgba(128,0,0,0.3)"}}>
+                          <ChatNav c="white" s={13}/>Message Seller
+                        </button>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredListings.length===0&&<Empty icon={<Bag c={T.textDim} s={40}/>} msg="No listings found"/>}
+            </div>
+          </div>}
+        </>}
+
+        {/* ── MESSAGES TAB ── */}
+        {nav==="messages"&&(
+          <MessagesScreen convos={convos} userEmail={userEmail} onOpen={c=>{setOpenChat({...c,unread:0});setConvos(cs=>cs.map(cv=>cv.id===c.id?{...cv,unread:0}:cv));}} totalUnread={totalUnread} pendingReqs={pendingReqs} acceptRequest={acceptRequest} declineRequest={declineRequest}/>
+        )}
+
+        {/* ── PROFILE ── */}
+        {nav==="profile"&&<>
+          {!profilePage&&<div style={{padding:"32px 16px 24px"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:28}}>
+              <div style={{width:80,height:80,borderRadius:"50%",background:T.maroon,border:"3px solid #f5c0c0",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(128,0,0,0.25)",marginBottom:12}}><User c="white" s={36}/></div>
+              <h2 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:18,fontWeight:900,color:T.textMain}}>{username}</h2>
+              <p style={{fontSize:12,color:T.textSub,marginTop:3}}>{userEmail}</p>
+              <div style={{display:"flex",gap:24,marginTop:16}}>
+                {[[myConfs.length,"Posts"],[48,"Upvotes"],[myListings.length,"Listings"]].map(([n,l])=>(
+                  <div key={l} style={{textAlign:"center"}}>
+                    <p style={{fontSize:18,fontWeight:900,color:T.maroon}}>{n}</p>
+                    <p style={{fontSize:11,color:T.textSub}}>{l}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden",boxShadow:"0 2px 12px rgba(128,0,0,0.07)",marginBottom:16}}>
+              {[
+                {key:"myConfs",lbl:"My Confessions",badge:myConfs.length,icon:<Ghost c={T.textDim} s={16}/>},
+                {key:"myListings",lbl:"My Listings",badge:myListings.length,icon:<Bag c={T.textDim} s={16}/>},
+                {key:"saved",lbl:"Saved Posts",badge:Object.keys(saved).length,icon:<Hrt c={T.textDim} s={16}/>},
+                {key:"reportHistory",lbl:"Report History",badge:reportedIds.length,icon:<Flag c={T.textDim} s={16}/>},
+              ].map(({key,lbl,badge,icon},i,arr)=>(
+                <button key={key} onClick={()=>setProfilePage(key)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:"transparent",border:"none",borderBottom:i<arr.length-1?`1px solid ${T.border}`:"none",cursor:"pointer",textAlign:"left",transition:"background 0.15s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#fdf0f0"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>{icon}<span style={{fontSize:14,fontWeight:700,color:T.textMain}}>{lbl}</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {badge>0&&<span style={{background:"#fdf0f0",color:T.maroon,border:`1px solid ${T.border}`,borderRadius:999,fontSize:11,fontWeight:900,padding:"2px 8px"}}>{badge}</span>}
+                    <Chev c={T.textDim}/>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setSignOutDlg(true)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"13px",borderRadius:12,background:"#fdf0f0",border:`1px solid ${T.border}`,color:T.maroon,fontSize:14,fontWeight:700,cursor:"pointer"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f5d5d5";e.currentTarget.style.borderColor=T.maroon;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fdf0f0";e.currentTarget.style.borderColor=T.border;}}>
+              <LogOut c={T.maroon} s={16}/>Sign Out
+            </button>
+          </div>}
+          {profilePage==="myConfs"&&(
+            <SubPage title="My Confessions" icon={<Ghost c={T.maroon} s={18}/>}>
+              {myConfs.length===0?<Empty icon={<Ghost c={T.textDim} s={40}/>} msg="No confessions posted yet."/>:
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {myConfs.map(c=>(
+                    <div key={c.id} className="card">
+                      <p style={{fontSize:14,color:T.textMain,lineHeight:1.6,fontFamily:"Georgia,serif",marginBottom:10}}>{c.text}</p>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <span style={{fontSize:12,color:T.textDim}}>{c.time} · ↑ {c.upvotes} · 💬 {c.comments}</span>
+                        <button onClick={()=>{(async()=>{await sb.from("posts").delete().eq("id",c.id);setConfs(cs=>cs.filter(x=>x.id!==c.id));showToast("Confession deleted.");})();}} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:999,background:"#fef2f2",border:"1px solid #fecaca",color:"#dc2626",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                          <Trash c="#dc2626" s={12}/>Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>}
+            </SubPage>
+          )}
+          {profilePage==="myListings"&&(
+            <SubPage title="My Listings" icon={<Bag c={T.maroon} s={18}/>}>
+              {myListings.length===0?<Empty icon={<Bag c={T.textDim} s={40}/>} msg="No listings yet."/>:
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {myListings.map(l=>{const cc=CC[l.category]||CC.other;return(
+                    <div key={l.id} className="card">
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                        <div><p style={{fontWeight:700,color:T.textMain,fontSize:14}}>{l.title}</p><p style={{fontSize:12,color:T.textSub,marginTop:2}}>{l.desc}</p></div>
+                        <p style={{fontSize:16,fontWeight:900,color:T.maroon,flexShrink:0,marginLeft:12}}>₹{l.price}</p>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",gap:6}}>
+                          <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:cc.bg,color:cc.color,border:`1px solid ${cc.border}`}}>{catIco(l.category)}{catLbl(l.category)}</span>
+                          <span style={{fontSize:11,color:T.textSub,background:"#fdf0f0",border:`1px solid ${T.border}`,padding:"2px 8px",borderRadius:999}}>{l.condition}</span>
+                        </div>
+                        <button onClick={()=>{(async()=>{await sb.from("listings").delete().eq("id",l.id);setListings(ls=>ls.filter(x=>x.id!==l.id));showToast("Listing deleted.");})();}} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:999,background:"#fef2f2",border:"1px solid #fecaca",color:"#dc2626",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                          <Trash c="#dc2626" s={12}/>Delete
+                        </button>
+                      </div>
+                    </div>
+                  );})}
+                </div>}
+            </SubPage>
+          )}
+          {profilePage==="saved"&&(
+            <SubPage title="Saved Posts" icon={<Hrt c={T.maroon} s={18}/>}>
+              {savedConfs.length===0?<Empty icon={<Hrt c={T.textDim} s={40}/>} msg="No saved posts yet. Tap ♥ to save."/>:
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {savedConfs.map(c=>(
+                    <div key={c.id} className="card">
+                      <p style={{fontSize:14,color:T.textMain,lineHeight:1.6,fontFamily:"Georgia,serif",marginBottom:10}}>{c.text}</p>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:12,color:T.textDim}}>{c.time} · ↑ {c.upvotes}</span>
+                        <button onClick={()=>toggleSave(c.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:999,background:"#fdf0f0",border:`1px solid ${T.border}`,color:T.maroon,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                          <Xx c={T.maroon} s={11}/>Unsave
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>}
+            </SubPage>
+          )}
+          {profilePage==="reportHistory"&&(
+            <SubPage title="Report History" icon={<Flag c={T.maroon} s={18}/>}>
+              {reportedIds.length===0?<Empty icon={<Flag c={T.textDim} s={40}/>} msg="Nothing reported yet."/>:
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <p style={{fontSize:12,color:T.textSub,marginBottom:6,lineHeight:1.5}}>Items you reported are under moderation review.</p>
+                  {reportedIds.map(id=>{
+                    const post=confs.find(c=>String(c.id)===id)||listings.find(l=>String(l.id)===id);
+                    return(
+                      <div key={id} style={{background:T.card,border:"1px solid #fde68a",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:999,padding:"3px 8px",fontSize:11,fontWeight:700,color:"#92400e",flexShrink:0}}>Reported</span>
+                        <p style={{fontSize:13,color:T.textMain,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{post?(post.text||post.title):`ID: ${id}`}</p>
+                      </div>
+                    );
+                  })}
+                </div>}
+            </SubPage>
+          )}
+        </>}
+      </main>
+
+      {/* ── BOTTOM NAV (4 tabs now) ── */}
+      <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,zIndex:30,backgroundColor:T.maroon,borderTop:"1px solid rgba(255,255,255,0.15)",boxShadow:"0 -4px 20px rgba(128,0,0,0.25)"}}>
+        <div style={{display:"flex"}}>
+          {[
+            {id:"feed",    icon:<Rss s={20}/>,     lbl:"Feed",       act:()=>{setNav("feed");setTab("confessions");setProfilePage(null);}},
+            {id:"market",  icon:<Bag s={20}/>,     lbl:"Market",     act:()=>{setNav("feed");setTab("marketplace");setProfilePage(null);}},
+            {id:"messages",icon:<ChatNav s={20}/>, lbl:"Messages",   act:()=>{setNav("messages");setProfilePage(null);fetchConvos();fetchPendingReqs();}, badge:totalUnread},
+            {id:"profile", icon:<User s={20}/>,    lbl:"Profile",    act:()=>{setNav("profile");setProfilePage(null);}},
+          ].map(n=>{
+            const a=n.id==="profile"?nav==="profile":n.id==="messages"?nav==="messages":n.id==="market"?(nav==="feed"&&tab==="marketplace"):(nav==="feed"&&tab==="confessions");
+            return(
+              <button key={n.id} onClick={n.act} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 0 8px",gap:2,border:"none",background:a?"rgba(255,255,255,0.12)":"transparent",cursor:"pointer",color:a?"white":"rgba(255,255,255,0.6)",transition:"all 0.2s",position:"relative"}}>
+                <span style={{transform:a?"scale(1.15)":"scale(1)",transition:"transform 0.2s",display:"flex"}}>{n.icon}</span>
+                <span style={{fontSize:9,fontWeight:900,letterSpacing:"0.04em"}}>{n.lbl}</span>
+                {a&&<div style={{width:22,height:2,borderRadius:2,background:"rgba(255,255,255,0.9)"}}/>}
+                {n.badge>0&&<div style={{position:"absolute",top:6,right:"calc(50% - 14px)",width:17,height:17,borderRadius:"50%",background:"#ef4444",border:"2px solid #800000",color:"white",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{n.badge}</div>}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ── FAB ── */}
+      {nav!=="profile"&&nav!=="messages"&&<button onClick={()=>tab==="marketplace"?setSellModal(true):setConfModal(true)}
+        style={{position:"fixed",bottom:80,right:16,zIndex:40,width:56,height:56,borderRadius:"50%",background:T.maroon,border:"none",color:"white",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 24px rgba(128,0,0,0.45)",transition:"transform 0.2s"}}
+        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"}
+        onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+        <Plus c="white"/>
+      </button>}
+
+      {/* ── CONFESSION MODAL ── */}
+      {confModal&&(
+        <ModalShell onClose={()=>setConfModal(false)}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:T.maroon,display:"flex",alignItems:"center",justifyContent:"center"}}><Ghost c="white"/></div>
+            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:900,color:T.textMain}}>Anonymous Confession</h3>
+          </div>
+          <textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="What's on your mind? It stays anonymous…" rows={4} autoFocus dir="ltr"
+            style={{width:"100%",background:"#fdf5f5",border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 16px",fontSize:14,color:T.textMain,outline:"none",resize:"none",direction:"ltr",textTransform:"none"}}
+            onFocus={e=>e.target.style.borderColor=T.maroon} onBlur={e=>e.target.style.borderColor=T.border}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:16}}>
+            <span style={{fontSize:12,color:T.textDim,display:"flex",alignItems:"center",gap:6}}><Ghost c={T.textDim}/>100% anonymous</span>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setConfModal(false)} style={{padding:"8px 16px",borderRadius:999,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+              <button onClick={postConf} disabled={!draft.trim()} style={{padding:"8px 20px",borderRadius:999,background:draft.trim()?T.maroon:"#e8c0c0",border:"none",color:draft.trim()?"white":"#b06060",fontSize:13,fontWeight:900,cursor:draft.trim()?"pointer":"default",boxShadow:draft.trim()?"0 4px 14px rgba(128,0,0,0.35)":"none"}}>Post</button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* ── SELL MODAL ── */}
+      {sellModal&&(
+        <ModalShell onClose={()=>setSellModal(false)} tall>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:T.maroon,display:"flex",alignItems:"center",justifyContent:"center"}}><Bag c="white" s={14}/></div>
+            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:900,color:T.textMain}}>List Something for Sale</h3>
+          </div>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textSub,letterSpacing:"0.08em",marginBottom:6}}>ITEM TITLE *</label>
+          <input value={sell.title} onChange={e=>setSell(s=>({...s,title:e.target.value}))} placeholder="e.g. Engineering Mathematics Vol 1"
+            style={{width:"100%",background:"#fdf5f5",border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:14,color:T.textMain,outline:"none",marginBottom:14}}
+            onFocus={e=>e.target.style.borderColor=T.maroon} onBlur={e=>e.target.style.borderColor=T.border}/>
+          <div style={{display:"flex",gap:12,marginBottom:14}}>
+            <div style={{flex:1}}>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textSub,letterSpacing:"0.08em",marginBottom:6}}>PRICE (₹) *</label>
+              <input value={sell.price} onChange={e=>setSell(s=>({...s,price:e.target.value.replace(/\D/g,"")}))} placeholder="e.g. 200" type="text" inputMode="numeric"
+                style={{width:"100%",background:"#fdf5f5",border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:14,color:T.textMain,outline:"none"}}
+                onFocus={e=>e.target.style.borderColor=T.maroon} onBlur={e=>e.target.style.borderColor=T.border}/>
+            </div>
+            <div style={{flex:1}}>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textSub,letterSpacing:"0.08em",marginBottom:6}}>CATEGORY</label>
+              <select value={sell.category} onChange={e=>setSell(s=>({...s,category:e.target.value}))}
+                style={{width:"100%",background:"#fdf5f5",border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:14,color:T.textMain,outline:"none",cursor:"pointer"}}>
+                <option value="book">📚 Book</option><option value="cycle">🚲 Cycle</option><option value="other">📦 Other</option>
+              </select>
+            </div>
+          </div>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textSub,letterSpacing:"0.08em",marginBottom:8}}>CONDITION</label>
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+            {["Like New","Good","Fair"].map(c=>(
+              <button key={c} onClick={()=>setSell(s=>({...s,condition:c}))} style={{flex:1,padding:"8px 0",borderRadius:10,fontSize:12,fontWeight:700,border:`1px solid ${sell.condition===c?T.maroon:T.border}`,background:sell.condition===c?T.maroon:"transparent",color:sell.condition===c?"white":T.textSub,cursor:"pointer",transition:"all 0.2s"}}>{c}</button>
+            ))}
+          </div>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textSub,letterSpacing:"0.08em",marginBottom:6}}>DESCRIPTION *</label>
+          <textarea value={sell.desc} onChange={e=>setSell(s=>({...s,desc:e.target.value}))} placeholder="Describe your item…" rows={3} dir="ltr"
+            style={{width:"100%",background:"#fdf5f5",border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:14,color:T.textMain,outline:"none",resize:"none",marginBottom:16,direction:"ltr",textTransform:"none"}}
+            onFocus={e=>e.target.style.borderColor=T.maroon} onBlur={e=>e.target.style.borderColor=T.border}/>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={()=>setSellModal(false)} style={{padding:"10px 20px",borderRadius:999,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+            <button onClick={postSell} disabled={!sell.title.trim()||!sell.price||!sell.desc.trim()}
+              style={{padding:"10px 24px",borderRadius:999,border:"none",fontSize:13,fontWeight:900,cursor:sell.title.trim()&&sell.price&&sell.desc.trim()?"pointer":"default",background:sell.title.trim()&&sell.price&&sell.desc.trim()?T.maroon:"#e8c0c0",color:sell.title.trim()&&sell.price&&sell.desc.trim()?"white":"#b06060",boxShadow:sell.title.trim()&&sell.price&&sell.desc.trim()?"0 4px 14px rgba(128,0,0,0.35)":"none"}}>List Item</button>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* ── SIGN OUT CONFIRM ── */}
+      {commentsPost&&(<ModalShell onClose={()=>setCommentsPost(null)} tall><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><div style={{width:28,height:28,borderRadius:"50%",background:T.maroon,display:"flex",alignItems:"center",justifyContent:"center"}}><MsgIco c="white" s={14}/></div><h3 style={{fontSize:16,fontWeight:900,color:T.textMain}}>Comments</h3><span style={{marginLeft:"auto",fontSize:12,color:T.textDim}}>{commentsPost.comments||0} comments</span></div><p style={{fontSize:13,color:T.textSub,fontStyle:"italic",background:T.subtle,borderRadius:10,padding:"10px 14px",marginBottom:16}}>{commentsPost.text.slice(0,90)}</p><div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>{(commentsPost.commentsList||[{id:1,user:"anon_ghost",text:"This is literally me every semester",time:"2h ago"},{id:2,user:"campus_soul",text:"I felt this in my bones",time:"3h ago"}]).map(cm=>(<div key={cm.id} style={{background:T.subtle,borderRadius:12,padding:"10px 14px",border:"1px solid #e8c0c0"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:11,fontWeight:700,color:T.maroon}}>👻 {cm.user}</span><span style={{fontSize:11,color:T.textDim}}>{cm.time}</span></div><p style={{fontSize:13,color:T.textMain}}>{cm.text}</p></div>))}</div><div style={{display:"flex",gap:8,alignItems:"flex-end",borderTop:"1px solid #e8c0c0",paddingTop:12}}><textarea value={commentDraft} onChange={e=>setCommentDraft(e.target.value)} placeholder="Comment anonymously..." rows={2} dir="ltr" style={{flex:1,background:"#fdf5f5",border:"1px solid #e8c0c0",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#1a0000",outline:"none",resize:"none",direction:"ltr"}} onFocus={e=>e.target.style.borderColor="#800000"} onBlur={e=>e.target.style.borderColor="#e8c0c0"}/><button onClick={()=>{if(!commentDraft.trim())return;(async()=>{const{data,error}=await sb.from("comments").insert({post_id:commentsPost.id,user_id:user?.id,text:commentDraft.trim()}).select().single();if(!error){const nc={id:data.id,user:userEmail.split("@")[0],text:commentDraft.trim(),time:"just now"};setConfs(cs=>cs.map(c=>c.id===commentsPost.id?{...c,comments:(c.comments||0)+1,commentsList:[...(c.commentsList||[]),nc]}:c));setCommentsPost(cp=>({...cp,comments:(cp.comments||0)+1,commentsList:[...(cp.commentsList||[]),nc]}));setCommentDraft("");showToast("Comment posted 👻");}else showToast("Failed.","#ef4444");})();}} style={{width:42,height:42,borderRadius:"50%",background:commentDraft.trim()?"#800000":"#e8c0c0",border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width={16} height={16} fill="white" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z" fill="none" stroke="white" strokeWidth="2"/></svg></button></div></ModalShell>)}
+
+      {signOutDlg&&(
+        <div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+          <div style={{position:"absolute",inset:0,background:"rgba(26,0,0,0.5)",backdropFilter:"blur(4px)"}} onClick={()=>setSignOutDlg(false)}/>
+          <div className="fade-up" style={{position:"relative",width:"100%",maxWidth:320,background:T.card,border:`1px solid ${T.border}`,borderRadius:20,padding:24,boxShadow:"0 8px 40px rgba(128,0,0,0.2)",textAlign:"center"}}>
+            <div style={{width:48,height:48,borderRadius:"50%",background:"#fdf0f0",border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><LogOut c={T.maroon} s={22}/></div>
+            <h3 style={{fontSize:16,fontWeight:900,color:T.textMain,marginBottom:8,fontFamily:"'Playfair Display',serif"}}>Sign out?</h3>
+            <p style={{fontSize:13,color:T.textSub,marginBottom:20,lineHeight:1.5}}>You'll need your magic link to get back in.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setSignOutDlg(false)} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub,fontSize:13,fontWeight:700,cursor:"pointer"}}>Stay in</button>
+              <button onClick={onSignOut} style={{flex:1,padding:"11px",borderRadius:12,border:"none",background:T.maroon,color:"white",fontSize:13,fontWeight:900,cursor:"pointer",boxShadow:"0 3px 12px rgba(128,0,0,0.35)"}}>Sign out</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST ── */}
+      {toast&&(
+        <div className="fade-up" style={{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",zIndex:99,display:"flex",alignItems:"center",gap:10,padding:"12px 20px",borderRadius:16,background:"#1a0000",color:"white",fontSize:13,fontWeight:700,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",maxWidth:"85vw",textAlign:"center",wordBreak:"break-word",whiteSpace:"normal"}}>
+          <Check c={toast.color||"#4ade80"} s={15}/>{toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════ ROOT ══════════ */
+function Root(){
+  const [session,setSession]=useState(null);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{setSession(session);setLoading(false);});
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setSession(session);setLoading(false);});
+    return()=>subscription.unsubscribe();
+  },[]);
+  const signOut=async()=>{await sb.auth.signOut();setSession(null);};
+  const handleDemoLogin=email=>setSession({user:{email,id:"demo-"+Date.now()}});
+  if(loading) return(
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",backgroundColor:T.page}}>
+      <div style={{textAlign:"center"}}><Spinner s={36} c={T.maroon}/><p style={{marginTop:14,fontSize:13,color:T.textDim,fontWeight:600}}>Loading The Quad…</p></div>
+    </div>
+  );
+  if(!session) return <AuthScreen onDemoLogin={handleDemoLogin}/>;
+  return <MainApp user={session.user} onSignOut={signOut}/>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
+</script>
+</body>
+</html>
