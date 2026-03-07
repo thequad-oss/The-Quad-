@@ -539,15 +539,15 @@ function MainApp({ user, onSignOut }) {
   const username = userEmail.split("@")[0];
   const totalUnread = convos.reduce((s, c) => s + (c.unread || 0), 0);
   const seenBellIds = React.useRef((() => { try { return new Set(JSON.parse(localStorage.getItem("sbi_" + (user?.id||"")) || "[]")); } catch(e) { return new Set(); } })());
+  const [bellTick, setBellTick] = React.useState(0); // force re-render when seenBellIds changes
   const [revealConvoIds, setRevealConvoIds] = useState(/* @__PURE__ */ new Set());
   const [revealNotifs, setRevealNotifs] = useState([]);
-  const allBellNotifIds = [
-    ...pendingReqs.map(r => "req_" + r.id),
-    ...(acceptedNotifs||[]).map(n => "acc_" + n.id),
-    ...(revealNotifs||[]).map(n => "rev_" + n.id)
+  const allBellIds = [
+    ...(pendingReqs||[]).map(r => "req_"+r.id),
+    ...(acceptedNotifs||[]).map(n => "notif_"+n.id),
+    ...(revealNotifs||[]).map(n => "rev_"+n.id)
   ];
-  const totalNotifs = allBellNotifIds.filter(id => !(seenBellIds.current||new Set()).has(id)).length;
-  const rawNotifsCount = allBellNotifIds.length;
+  const totalNotifs = allBellIds.filter(id => !seenBellIds.current.has(id)).length;
   const revealPendingCount = revealNotifs.length;
   const showToast = (msg, color = "#16a34a") => {
     setToast({ msg, color });
@@ -669,10 +669,10 @@ function MainApp({ user, onSignOut }) {
       seen.add(key);
       result[key] = c.status || "pending";
     });
-    // Protect recently-sent requests from stale DB poll overwriting optimistic state
-    const now = Date.now();
+    // Race guard: keep "pending" for 8s after click so DB propagation delay doesn't reset button
+    const _now = Date.now();
     Object.entries(connectReqTimestamps.current).forEach(([key, ts]) => {
-      if (now - ts < 8000) result[key] = "pending";
+      if (_now - ts < 8000) result[key] = "pending";
     });
     setConnectReqs(result);
   };
@@ -959,6 +959,9 @@ function MainApp({ user, onSignOut }) {
     delete sn["dec_" + String(conf.id)];
     seenNotifIds.current = sn;
     localStorage.setItem("sni_" + (user == null ? void 0 : user.id), JSON.stringify(sn));
+    // Remove old accepted/declined bell IDs for this post so re-request shows badge
+    seenBellIds.current.delete("notif_"+String(conf.id));
+    try { localStorage.setItem("sbi_"+(user?.id||""),JSON.stringify([...seenBellIds.current])); } catch(e) {}
     const { error } = await sb.from("conversations").insert({
       type: "confession",
       participant_1: user == null ? void 0 : user.id,
@@ -981,17 +984,19 @@ function MainApp({ user, onSignOut }) {
     await sb.from("conversations").update({ status: "accepted", peer_email: userEmail }).eq("id", req.id);
     const sysText = "Connection accepted! You can now chat anonymously.";
     await sb.from("messages").insert({ conversation_id: req.id, sender_id: user == null ? void 0 : user.id, text: sysText, is_system: true });
-    setPendingReqs((rs) => rs.filter((r) => r.id !== req.id));
-    const nc = { id: req.id, type: "confession", with: req.initiator_email || req.participant_1, confText: req.conf_text || "", revealed: false, unread: 1, messages: [] };
-    setAcceptedNotifs((ns) => [{ id: req.id, text: "Your connection request was accepted!", confText: req.conf_text || "", ts: /* @__PURE__ */ new Date() }, ...ns.filter((n) => n.id !== req.id)]);
-    setConvos((cs) => [nc, ...cs]);
-    setOpenChat(nc);
-    showToast("Chat started!");
+    // Remove from pending, add convo quietly (no auto-open chat)
+    setPendingReqs((rs) => (rs||[]).filter((r) => r.id !== req.id));
+    const nc = { id: req.id, type: "confession", with: req.initiator_email || req.participant_1, confText: req.conf_text || "", revealed: false, unread: 0, messages: [] };
+    setConvos((cs) => [nc, ...(cs||[]).filter(c => c.id !== req.id)]);
+    // Clear bell badge for this req (action taken = no longer new)
+    const id_ = "req_"+req.id; seenBellIds.current.add(id_); setBellTick(t=>t+1); try { localStorage.setItem("sbi_"+(user?.id||""),JSON.stringify([...seenBellIds.current])); } catch(e) {}
+    showToast("Request accepted! Open Messages to chat.");
   };
   const declineRequest = async (req) => {
     await sb.from("conversations").update({ status: "declined" }).eq("id", req.id);
-    setPendingReqs((rs) => rs.filter((r) => r.id !== req.id));
-    setConvos((cs) => cs.filter((c) => c.id !== req.id));
+    setPendingReqs((rs) => (rs||[]).filter((r) => r.id !== req.id));
+    setConvos((cs) => (cs||[]).filter((c) => c.id !== req.id));
+    const id_ = "req_"+req.id; seenBellIds.current.add(id_); setBellTick(t=>t+1); try { localStorage.setItem("sbi_"+(user?.id||""),JSON.stringify([...seenBellIds.current])); } catch(e) {}
     showToast("Request declined.");
   };
   useEffect(() => {
@@ -1036,7 +1041,7 @@ function MainApp({ user, onSignOut }) {
   return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", backgroundColor: T.page, position: "relative" } }, /* @__PURE__ */ React.createElement("header", { style: { position: "sticky", top: 0, zIndex: 30, backgroundColor: T.maroon, boxShadow: "0 4px 20px rgba(128,0,0,0.25)" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 1, background: "linear-gradient(to right,transparent,rgba(255,220,150,0.6),transparent)" } }), /* @__PURE__ */ React.createElement("div", { style: { padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React.createElement("h1", { style: { fontFamily: "'Playfair Display',Georgia,serif", fontSize: 22, fontWeight: 900, color: "white", letterSpacing: "0.15em" } }, "THE QUAD"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 5 } }, /* @__PURE__ */ React.createElement("div", { className: "pulse", style: { width: 7, height: 7, borderRadius: "50%", background: "#86efac" } }), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: "rgba(255,255,255,0.75)", fontWeight: 700 } }, "Live")), /* @__PURE__ */ React.createElement("button", { onClick: () => {
     setShowNotifs((n) => {
       const next = !n;
-      if (next) { allBellNotifIds.forEach(id => (seenBellIds.current||new Set()).add(id)); try { localStorage.setItem("sbi_" + (user?.id||""), JSON.stringify([...seenBellIds.current])); } catch(e) {} }
+      if (next) { allBellIds.forEach(id => seenBellIds.current.add(id)); setBellTick(t=>t+1); try { localStorage.setItem("sbi_" + (user?.id||""), JSON.stringify([...seenBellIds.current])); } catch(e) {} }
       return next;
     });
   }, style: { position: "relative", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } }, /* @__PURE__ */ React.createElement(Bell, { c: "white", s: 17 }), totalNotifs > 0 && /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", top: -3, right: -3, background: "#ff4444", color: "white", fontSize: 9, fontWeight: 900, borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" } }, totalNotifs)), /* @__PURE__ */ React.createElement(
@@ -1201,7 +1206,7 @@ function MainApp({ user, onSignOut }) {
       setProfilePage(null);
       fetchConvos();
       fetchPendingReqs();
-    }, badge: totalUnread + pendingReqs.length + revealPendingCount },
+    }, badge: totalUnread },
     { id: "profile", icon: /* @__PURE__ */ React.createElement(User, { s: 20 }), lbl: "Profile", act: () => {
       setNav("profile");
       setProfilePage(null);
@@ -1296,7 +1301,7 @@ function MainApp({ user, onSignOut }) {
         showToast("Comment posted \u{1F47B}");
       } else showToast("Failed.", "#ef4444");
     })();
-  }, style: { width: 42, height: 42, borderRadius: "50%", background: commentDraft.trim() ? "#800000" : "#e8c0c0", border: "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, /* @__PURE__ */ React.createElement("svg", { width: 16, height: 16, fill: "white", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { d: "M22 2L11 13" }), /* @__PURE__ */ React.createElement("path", { d: "M22 2L15 22l-4-9-9-4 20-7z", fill: "none", stroke: "white", strokeWidth: "2" }))))), showNotifs && /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 55, background: "#fff", display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { background: T.maroon, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 } }, /* @__PURE__ */ React.createElement("button", { onClick: () => { setShowNotifs(false); allBellNotifIds.forEach(id => (seenBellIds.current||new Set()).add(id)); try { localStorage.setItem("sbi_" + (user?.id||""), JSON.stringify([...seenBellIds.current])); } catch(e) {} }, style: { background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, lineHeight: 1 } }, "\u2190"), /* @__PURE__ */ React.createElement("span", { style: { color: "white", fontWeight: 800, fontSize: 16, flex: 1 } }, "Notifications")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, overflowY: "auto" } }, pendingReqs.length === 0 && acceptedNotifs.length === 0 && revealNotifs.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { padding: 24, textAlign: "center", color: T.textDim, fontSize: 13 } }, "No notifications yet"), acceptedNotifs.map((n, i) => {
+  }, style: { width: 42, height: 42, borderRadius: "50%", background: commentDraft.trim() ? "#800000" : "#e8c0c0", border: "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, /* @__PURE__ */ React.createElement("svg", { width: 16, height: 16, fill: "white", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { d: "M22 2L11 13" }), /* @__PURE__ */ React.createElement("path", { d: "M22 2L15 22l-4-9-9-4 20-7z", fill: "none", stroke: "white", strokeWidth: "2" }))))), showNotifs && /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 55, background: "#fff", display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { background: T.maroon, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 } }, /* @__PURE__ */ React.createElement("button", { onClick: () => { setShowNotifs(false); allBellIds.forEach(id => seenBellIds.current.add(id)); setBellTick(t=>t+1); try { localStorage.setItem("sbi_" + (user?.id||""), JSON.stringify([...seenBellIds.current])); } catch(e) {} }, style: { background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, lineHeight: 1 } }, "\u2190"), /* @__PURE__ */ React.createElement("span", { style: { color: "white", fontWeight: 800, fontSize: 16, flex: 1 } }, "Notifications")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, overflowY: "auto" } }, pendingReqs.length === 0 && acceptedNotifs.length === 0 && revealNotifs.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { padding: 24, textAlign: "center", color: T.textDim, fontSize: 13 } }, "No notifications yet"), acceptedNotifs.map((n, i) => {
     const isDeclined = n.type === "declined";
     const isRevealAcc = n.type === "reveal_accepted";
     const isRevealDec = n.type === "reveal_declined";
@@ -1353,7 +1358,7 @@ function Root() {
       setLoading(false);
       if (event === "SIGNED_IN") {
         setTimeout(() => window.history.replaceState(null, "", window.location.pathname), 300);
-        try { if (!localStorage.getItem("wv1_" + (session2 && session2.user ? session2.user.id : ""))) setShowWelcome(true); } catch(e) {}
+        try { if (!localStorage.getItem("wv1_"+(session2&&session2.user?session2.user.id:""))) setShowWelcome(true); } catch(e) {}
       }
     });
     const hash = window.location.hash;
@@ -1386,43 +1391,46 @@ function Root() {
   if (loading) return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: T.page } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement(Spinner, { s: 36, c: T.maroon }), /* @__PURE__ */ React.createElement("p", { style: { marginTop: 14, fontSize: 13, color: T.textDim, fontWeight: 600 } }, "Loading The Quad\u2026")));
   if (!session) return /* @__PURE__ */ React.createElement(AuthScreen, { onDemoLogin: handleDemoLogin });
   const dismissWelcome = () => {
-    try { localStorage.setItem("wv1_" + session.user.id, "1"); } catch(e) {}
+    try { localStorage.setItem("wv1_"+session.user.id,"1"); } catch(e) {}
     setShowWelcome(false);
   };
   return /* @__PURE__ */ React.createElement(React.Fragment, null,
     /* @__PURE__ */ React.createElement(MainApp, { user: session.user, onSignOut: signOut }),
-    showWelcome && /* @__PURE__ */ React.createElement("div", {
-      style: { position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",boxSizing:"border-box" }
+    showWelcome && /* @__PURE__ */ React.createElement("div",{
+      style:{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,0.75)",
+             display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",boxSizing:"border-box"}
     },
-      /* @__PURE__ */ React.createElement("div", {
-        style: { background:"#fff",borderRadius:20,maxWidth:400,width:"100%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.4)" }
+      /* @__PURE__ */ React.createElement("div",{
+        style:{background:"#fff",borderRadius:20,maxWidth:400,width:"100%",maxHeight:"88vh",overflowY:"auto",
+               boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}
       },
-        /* @__PURE__ */ React.createElement("div", { style: { background:"#800000",borderRadius:"20px 20px 0 0",padding:"28px 20px 22px",textAlign:"center" } },
-          /* @__PURE__ */ React.createElement("div", { style: { fontSize:42,marginBottom:8 } }, "\uD83C\uDFDB\uFE0F"),
-          /* @__PURE__ */ React.createElement("h2", { style: { color:"white",fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,fontWeight:900,margin:0 } }, "Welcome to The Quad"),
-          /* @__PURE__ */ React.createElement("p", { style: { color:"rgba(255,255,255,0.85)",fontSize:13,margin:"8px 0 0" } }, "BBD University\u2019s anonymous social space")
+        /* @__PURE__ */ React.createElement("div",{style:{background:"#800000",borderRadius:"20px 20px 0 0",padding:"28px 20px 22px",textAlign:"center"}},
+          /* @__PURE__ */ React.createElement("div",{style:{fontSize:42,marginBottom:8}},"\uD83C\uDFDB\uFE0F"),
+          /* @__PURE__ */ React.createElement("h2",{style:{color:"white",fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,fontWeight:900,margin:0}},"Welcome to The Quad"),
+          /* @__PURE__ */ React.createElement("p",{style:{color:"rgba(255,255,255,0.85)",fontSize:13,margin:"8px 0 0"}},"BBD University\u2019s anonymous social space")
         ),
-        /* @__PURE__ */ React.createElement("div", { style: { padding:"20px" } },
-          /* @__PURE__ */ React.createElement("div", { style: { background:"#fff8f0",border:"1px solid #fed7aa",borderRadius:12,padding:"14px 16px",marginBottom:14 } },
-            /* @__PURE__ */ React.createElement("p", { style: { fontWeight:800,color:"#92400e",fontSize:13,margin:"0 0 10px" } }, "\uD83D\uDCD6 How It Works"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6 } }, "\uD83D\uDCDD Post anonymous confessions \u2014 no one knows it\u2019s you"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6 } }, "\uD83D\uDD17 Send connection requests to posts you like"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6 } }, "\uD83D\uDCAC Chat anonymously once they accept"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6 } }, "\uD83D\uDD13 Reveal identities only if BOTH agree"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6 } }, "\uD83D\uDECD\uFE0F Buy & sell in the Marketplace")
+        /* @__PURE__ */ React.createElement("div",{style:{padding:"20px"}},
+          /* @__PURE__ */ React.createElement("div",{style:{background:"#fff8f0",border:"1px solid #fed7aa",borderRadius:12,padding:"14px 16px",marginBottom:14}},
+            /* @__PURE__ */ React.createElement("p",{style:{fontWeight:800,color:"#92400e",fontSize:13,margin:"0 0 10px"}},"\uD83D\uDCD6 How It Works"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6}},"\uD83D\uDCDD Post anonymous confessions \u2014 no one knows it\u2019s you"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6}},"\uD83D\uDD17 Send connection requests to posts you like"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6}},"\uD83D\uDCAC Chat anonymously once accepted"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6}},"\uD83D\uDD13 Reveal identities only if BOTH agree"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#78350f",margin:"5px 0",lineHeight:1.6}},"\uD83D\uDECD\uFE0F Buy & sell in the Marketplace")
           ),
-          /* @__PURE__ */ React.createElement("div", { style: { background:"#fff0f0",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px",marginBottom:20 } },
-            /* @__PURE__ */ React.createElement("p", { style: { fontWeight:800,color:"#991b1b",fontSize:13,margin:"0 0 10px" } }, "\u26A0\uFE0F Community Rules"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6 } }, "\u2705 Be respectful \u2014 no hate speech or bullying"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6 } }, "\u2705 No sharing personal info of others without consent"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6 } }, "\u2705 Keep it relevant to BBD University"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6 } }, "\u2705 No spam or repeated posts"),
-            /* @__PURE__ */ React.createElement("p", { style: { fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6 } }, "\u274C Violations may result in account removal")
+          /* @__PURE__ */ React.createElement("div",{style:{background:"#fff0f0",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px",marginBottom:20}},
+            /* @__PURE__ */ React.createElement("p",{style:{fontWeight:800,color:"#991b1b",fontSize:13,margin:"0 0 10px"}},"\u26A0\uFE0F Community Rules"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6}},"\u2705 Be respectful \u2014 no hate speech or bullying"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6}},"\u2705 No sharing personal info of others without consent"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6}},"\u2705 Keep it relevant to BBD University"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6}},"\u2705 No spam or repeated posts"),
+            /* @__PURE__ */ React.createElement("p",{style:{fontSize:12,color:"#7f1d1d",margin:"5px 0",lineHeight:1.6}},"\u274C Violations may result in account removal")
           ),
-          /* @__PURE__ */ React.createElement("button", {
-            onClick: dismissWelcome,
-            style: { width:"100%",background:"#800000",color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,cursor:"pointer" }
-          }, "I Understand \u2014 Let me in! \uD83C\uDFDB\uFE0F")
+          /* @__PURE__ */ React.createElement("button",{
+            onClick:dismissWelcome,
+            style:{width:"100%",background:"#800000",color:"white",border:"none",borderRadius:12,
+                   padding:"14px",fontSize:15,fontWeight:800,cursor:"pointer"}
+          },"I Understand \u2014 Let me in! \uD83C\uDFDB\uFE0F")
         )
       )
     )
